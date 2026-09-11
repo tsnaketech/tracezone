@@ -21,10 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # No `version:` here on purpose: the action reads it from
+      # package.json#packageManager, so CI and Vercel stay on the same pnpm.
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 12
 
       - name: Set up Node.js
         uses: actions/setup-node@v5

@@ -31,7 +31,8 @@ There is no database, no authentication and no global state manager. RDAP is the
 
 ## Getting started
 
-Requires **Node.js 22.12+** (24 LTS recommended) and **pnpm 12+**.
+Requires **Node.js 22.12+** (24 LTS recommended) and **pnpm 10**, pinned through
+`package.json#packageManager` so local, CI and Vercel builds all use the same version.
 
 ```bash
 git clone https://github.com/tsnaketech/tracezone
