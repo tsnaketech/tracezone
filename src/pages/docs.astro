@@ -1,0 +1,285 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import CodeBlock from '@/components/CodeBlock.astro';
+import { APP_NAME, RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_MS } from '@/lib/config';
+
+const BASE = 'https://tracezone.vercel.app';
+
+const HTTP_CODES = [
+  ['200', 'Lookup succeeded. The domain may or may not be registered — read `registered`.'],
+  ['400', 'INVALID_DOMAIN or INVALID_FORMAT — the request could not be understood.'],
+  ['404', 'DOMAIN_NOT_FOUND — no RDAP service is published for this top-level domain.'],
+  ['405', 'METHOD_NOT_ALLOWED — only GET is accepted.'],
+  ['429', 'RATE_LIMITED — slow down; see `Retry-After`.'],
+  ['500', 'INTERNAL_ERROR — unexpected failure on our side.'],
+  ['502', 'RDAP_ERROR — the registry answered with an error.'],
+  ['504', 'UPSTREAM_TIMEOUT — the registry did not answer in time.'],
+] as const;
+
+const PARAMS = [
+  [
+    ':domain',
+    'path',
+    'required',
+    'Domain name. URLs, trailing dots, uppercase and IDN input are normalised.',
+  ],
+  ['format', 'query', 'json | toon', 'Output format. Takes precedence over the Accept header.'],
+  [
+    'raw',
+    'query',
+    'true | false',
+    'Include the untouched RDAP payload under `raw`. Defaults to true.',
+  ],
+] as const;
+
+const curlJson = `curl "${BASE}/api/v1/domain/example.com"`;
+const curlToon = `curl "${BASE}/api/v1/domain/example.com?format=toon"`;
+const curlAccept = `curl -H "Accept: text/toon" \\
+  "${BASE}/api/v1/domain/example.com"`;
+const curlSlim = `curl "${BASE}/api/v1/domain/example.com?raw=false"`;
+const curlHealth = `curl "${BASE}/api/health"`;
+
+const exampleJson = `{
+  "query": "example.com",
+  "type": "domain",
+  "registered": true,
+  "availability": "registered",
+  "source": {
+    "protocol": "rdap",
+    "url": "https://rdap.verisign.com/com/v1/domain/example.com",
+    "resolvedVia": "iana-bootstrap",
+    "retrievedAt": "2026-09-12T09:41:00.000Z"
+  },
+  "domain": {
+    "name": "EXAMPLE.COM",
+    "unicodeName": null,
+    "handle": "2336799_DOMAIN_COM-VRSN",
+    "statuses": ["client delete prohibited", "client transfer prohibited"]
+  },
+  "registrar": {
+    "name": "RESERVED-Internet Assigned Numbers Authority",
+    "handle": "376",
+    "ianaId": "376",
+    "url": "http://res-dom.iana.org",
+    "abuseEmail": null,
+    "abusePhone": null
+  },
+  "dates": {
+    "created": "1995-08-14T04:00:00.000Z",
+    "updated": "2025-08-14T07:01:34.000Z",
+    "expires": "2026-08-13T04:00:00.000Z",
+    "transferred": null,
+    "events": []
+  },
+  "nameservers": [
+    { "name": "A.IANA-SERVERS.NET", "unicodeName": null, "ipv4": [], "ipv6": [] }
+  ],
+  "dnssec": { "status": "signed", "delegationSigned": true, "zoneSigned": null, "dsRecords": [] },
+  "entities": [],
+  "redaction": { "applied": false, "fields": [] },
+  "notices": [],
+  "remarks": [],
+  "warnings": [],
+  "raw": {}
+}`;
+
+const exampleToon = `query: example.com
+type: domain
+registered: true
+availability: registered
+source:
+  protocol: rdap
+  url: "https://rdap.verisign.com/com/v1/domain/example.com"
+  resolvedVia: iana-bootstrap
+domain:
+  name: EXAMPLE.COM
+  handle: 2336799_DOMAIN_COM-VRSN
+  statuses[2]: client delete prohibited,client transfer prohibited
+nameservers[1]:
+  - name: A.IANA-SERVERS.NET`;
+
+const exampleError = `{
+  "error": {
+    "code": "INVALID_DOMAIN",
+    "message": "The supplied domain name is invalid."
+  }
+}`;
+
+const exampleAvailable = `{
+  "query": "this-domain-is-probably-free-1234.com",
+  "type": "domain",
+  "registered": false,
+  "availability": "possibly_available",
+  "domain": null
+}`;
+
+const windowSeconds = Math.round(RATE_LIMIT_WINDOW_MS / 1000);
+---
+
+<BaseLayout
+  title="API documentation"
+  description={`${APP_NAME} HTTP API — RDAP domain lookups in JSON and TOON.`}
+  canonicalPath="/docs"
+>
+  <div class="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+    <header class="mb-10">
+      <h1 class="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">API documentation</h1>
+      <p class="mt-2 text-[15px] text-muted">
+        {APP_NAME} exposes every lookup it performs as a public, unauthenticated HTTP API. Responses
+        are available in JSON and in TOON (Token-Oriented Object Notation).
+      </p>
+    </header>
+
+    <div class="space-y-12">
+      <section>
+        <h2 class="text-lg font-semibold text-fg">Domain lookup</h2>
+        <p class="tz-mono mt-2 text-[13px] text-accent">GET /api/v1/domain/:domain</p>
+        <p class="mt-3 text-[14px] text-muted">
+          Returns normalised RDAP registration data for a domain. The name is normalised before the
+          lookup: <code class="tz-mono text-fg">https://www.Example.com/path</code> is queried as
+          <code class="tz-mono text-fg">example.com</code>. Names that cannot be resolved
+          unambiguously are rejected with <code class="tz-mono text-fg">INVALID_DOMAIN</code> rather
+          than guessed.
+        </p>
+
+        <h3 class="mt-6 mb-2 text-[13px] font-semibold tracking-wide text-fg uppercase">
+          Parameters
+        </h3>
+        <div class="tz-card overflow-x-auto">
+          <table class="w-full text-left text-[13px]">
+            <thead class="border-b border-line text-subtle">
+              <tr>
+                <th class="px-3 py-2 font-medium">Name</th>
+                <th class="px-3 py-2 font-medium">In</th>
+                <th class="px-3 py-2 font-medium">Values</th>
+                <th class="px-3 py-2 font-medium">Description</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-line/60">
+              {PARAMS.map(([name, location, values, description]) => (
+                <tr>
+                  <td class="tz-mono px-3 py-2 whitespace-nowrap text-fg">{name}</td>
+                  <td class="px-3 py-2 text-muted">{location}</td>
+                  <td class="tz-mono px-3 py-2 text-muted">{values}</td>
+                  <td class="px-3 py-2 text-muted">{description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold text-fg">Choosing a format</h2>
+        <p class="mt-2 text-[14px] text-muted">
+          Both mechanisms are supported, and <code class="tz-mono text-fg">?format=</code> always
+          wins over <code class="tz-mono text-fg">Accept</code>. An unknown value for
+          <code class="tz-mono text-fg">format</code> is an error, not a silent fallback. Recognised
+          media types are <code class="tz-mono text-fg">application/json</code> and
+          <code class="tz-mono text-fg">text/toon</code>.
+        </p>
+
+        <div class="mt-4 space-y-3">
+          <CodeBlock id="tz-curl-json" label="JSON (default)" code={curlJson} />
+          <CodeBlock id="tz-curl-toon" label="TOON via query parameter" code={curlToon} />
+          <CodeBlock id="tz-curl-accept" label="TOON via content negotiation" code={curlAccept} />
+          <CodeBlock id="tz-curl-slim" label="Without the raw RDAP payload" code={curlSlim} />
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold text-fg">Response</h2>
+        <p class="mt-2 text-[14px] text-muted">
+          The payload is a TraceZone document, not a raw RDAP proxy: field names are stable across
+          registries, dates are ISO 8601, and the original RDAP object is preserved under
+          <code class="tz-mono text-fg">raw</code>. The TOON body carries exactly the same data.
+        </p>
+        <div class="mt-4 space-y-3">
+          <CodeBlock id="tz-example-json" label="application/json" code={exampleJson} />
+          <CodeBlock id="tz-example-toon" label="text/toon" code={exampleToon} />
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold text-fg">Availability</h2>
+        <p class="mt-2 text-[14px] text-muted">
+          When the authoritative RDAP server reports that a name does not exist, the lookup still
+          succeeds with HTTP 200 and <code class="tz-mono text-fg">registered: false</code>.
+        </p>
+        <div class="mt-4">
+          <CodeBlock id="tz-example-available" label="Not registered" code={exampleAvailable} />
+        </div>
+        <p class="mt-4 rounded-md border border-warning/30 bg-warning-soft/40 px-3 py-2.5 text-[13px] text-muted">
+          <strong class="text-fg">possibly_available</strong> means only that RDAP does not report
+          the domain as registered. It is not a commercial guarantee of availability: registry lag,
+          reserved or premium names, pending registrations and TLD-specific rules all mean a name
+          can be unavailable to buy while RDAP returns nothing. Always confirm with a registrar
+          before acting on it.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold text-fg">Errors</h2>
+        <p class="mt-2 text-[14px] text-muted">
+          Errors use a single envelope and are rendered in the negotiated format, so a TOON client
+          never receives a JSON error body.
+        </p>
+        <div class="mt-4">
+          <CodeBlock id="tz-example-error" label="Error envelope" code={exampleError} />
+        </div>
+
+        <div class="tz-card mt-4 overflow-x-auto">
+          <table class="w-full text-left text-[13px]">
+            <thead class="border-b border-line text-subtle">
+              <tr>
+                <th class="px-3 py-2 font-medium">Status</th>
+                <th class="px-3 py-2 font-medium">Meaning</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-line/60">
+              {HTTP_CODES.map(([code, meaning]) => (
+                <tr>
+                  <td class="tz-mono px-3 py-2 align-top text-fg">{code}</td>
+                  <td class="px-3 py-2 text-muted">{meaning}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold text-fg">Limits and caching</h2>
+        <ul class="mt-2 space-y-2 text-[14px] text-muted">
+          <li>
+            <strong class="text-fg">Rate limit.</strong> {RATE_LIMIT_MAX_REQUESTS} requests per{' '}
+            {windowSeconds} seconds per client address, with
+            <code class="tz-mono text-fg"> X-RateLimit-*</code> headers on every response. The MVP
+            limiter is per serverless instance — treat it as a courtesy limit, not a quota.
+          </li>
+          <li>
+            <strong class="text-fg">Caching.</strong> Successful lookups are cached at the edge for
+            one hour with a one-day stale-while-revalidate; unregistered answers for five minutes.
+            Errors are never cached.
+          </li>
+          <li>
+            <strong class="text-fg">Upstream budget.</strong> RDAP requests time out after 8 seconds
+            and responses larger than 2 MB are refused.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-lg font-semibold text-fg">Health</h2>
+        <p class="tz-mono mt-2 text-[13px] text-accent">GET /api/health</p>
+        <p class="mt-3 text-[14px] text-muted">
+          Returns <code class="tz-mono text-fg">{'{ "status": "ok" }'}</code>. It reports that this
+          deployment is serving; it does not probe RDAP registries.
+        </p>
+        <div class="mt-4">
+          <CodeBlock id="tz-curl-health" label="Health check" code={curlHealth} />
+        </div>
+      </section>
+    </div>
+  </div>
+</BaseLayout>
