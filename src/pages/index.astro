@@ -1,0 +1,61 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SearchBar from '@/components/SearchBar.svelte';
+import { APP_NAME, APP_TAGLINE } from '@/lib/config';
+
+const FEATURES = [
+  {
+    title: 'Authoritative RDAP',
+    body: 'Queries the registry published in the IANA bootstrap registry, with rdap.org as a fallback. No WHOIS scraping.',
+  },
+  {
+    title: 'Normalised output',
+    body: 'Registrar, dates, nameservers, DNSSEC and status codes in one stable schema — plus the untouched RDAP payload.',
+  },
+  {
+    title: 'JSON and TOON API',
+    body: 'Every lookup is available programmatically at /api/v1/domain/:domain, in JSON or Token-Oriented Object Notation.',
+  },
+] as const;
+---
+
+<BaseLayout canonicalPath="/">
+  <section class="mx-auto max-w-3xl px-4 pt-16 pb-10 sm:px-6 sm:pt-24">
+    <div class="text-center">
+      <h1 class="text-4xl font-semibold tracking-tight text-fg sm:text-5xl">{APP_NAME}</h1>
+      <p class="mt-3 text-base text-muted sm:text-lg">{APP_TAGLINE}</p>
+    </div>
+
+    <div class="mt-8">
+      <SearchBar client:load showExamples autofocus />
+    </div>
+
+    <p class="mt-6 text-center text-[13px] text-subtle">
+      Paste a domain, a hostname or a full URL — TraceZone normalises it before querying RDAP.
+    </p>
+  </section>
+
+  <section class="mx-auto max-w-5xl px-4 pb-4 sm:px-6">
+    <div class="grid gap-4 sm:grid-cols-3">
+      {FEATURES.map((feature) => (
+        <div class="tz-card px-4 py-4">
+          <h2 class="text-[13px] font-semibold text-fg">{feature.title}</h2>
+          <p class="mt-1.5 text-[13px] leading-relaxed text-muted">{feature.body}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+    <div class="tz-card overflow-hidden">
+      <div class="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <h2 class="text-[13px] font-semibold tracking-wide text-fg uppercase">Use it as an API</h2>
+        <a class="text-[13px] text-accent hover:underline" href="/docs">
+          Read the docs →
+        </a>
+      </div>
+      <pre class="tz-mono overflow-x-auto px-4 py-3.5 text-[12.5px] leading-relaxed text-muted"><code>curl "https://tracezone.vercel.app/api/v1/domain/example.com"
+curl "https://tracezone.vercel.app/api/v1/domain/example.com?format=toon"</code></pre>
+    </div>
+  </section>
+</BaseLayout>

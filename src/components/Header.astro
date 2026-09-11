@@ -1,0 +1,63 @@
+---
+import ThemeToggle from '@/components/ThemeToggle.svelte';
+import { APP_NAME, APP_REPOSITORY } from '@/lib/config';
+
+const path = Astro.url.pathname;
+const isDocs = path.startsWith('/docs');
+---
+
+<header class="sticky top-0 z-20 border-b border-line bg-bg/85 backdrop-blur">
+  <div class="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+    <a href="/" class="flex items-center gap-2.5" aria-label={`${APP_NAME} home`}>
+      <svg viewBox="0 0 32 32" class="h-6 w-6 text-accent" aria-hidden="true">
+        <circle
+          cx="16"
+          cy="16"
+          r="9.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          opacity="0.4"
+        ></circle>
+        <circle
+          cx="16"
+          cy="16"
+          r="4.5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.9"
+        ></circle>
+        <circle cx="16" cy="16" r="1.9" fill="currentColor"></circle>
+        <path
+          d="M16 2.5v4M16 25.5v4M2.5 16h4M25.5 16h4"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          opacity="0.65"
+        ></path>
+      </svg>
+      <span class="text-[15px] font-semibold tracking-tight">{APP_NAME}</span>
+    </a>
+
+    <nav class="flex items-center gap-1 text-sm" aria-label="Main">
+      <a
+        href="/docs"
+        class:list={[
+          'rounded-md px-2.5 py-1.5 transition-colors hover:text-fg',
+          isDocs ? 'text-fg' : 'text-muted',
+        ]}
+      >
+        API docs
+      </a>
+      <a
+        href={APP_REPOSITORY}
+        rel="noopener noreferrer"
+        target="_blank"
+        class="rounded-md px-2.5 py-1.5 text-muted transition-colors hover:text-fg"
+      >
+        GitHub
+      </a>
+      <ThemeToggle client:idle />
+    </nav>
+  </div>
+</header>

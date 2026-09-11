@@ -1,0 +1,50 @@
+---
+import type { ApiErrorCode } from '@/lib/api/errors';
+
+interface Props {
+  code: ApiErrorCode;
+  message: string;
+  /** The name the user asked about, echoed back for context. */
+  query?: string | undefined;
+}
+
+const { code, message, query } = Astro.props;
+
+/** A short, actionable next step per error class. */
+const HINTS: Partial<Record<ApiErrorCode, string>> = {
+  INVALID_DOMAIN:
+    'Enter a domain such as example.com. URLs and IP addresses are normalised or rejected.',
+  DOMAIN_NOT_FOUND:
+    'This top-level domain does not publish an RDAP service, so no data is available.',
+  RDAP_ERROR: 'The registry answered with an error. This is usually transient — try again shortly.',
+  UPSTREAM_TIMEOUT: 'The registry did not answer in time. Try again in a moment.',
+  RATE_LIMITED: 'Too many lookups from this address. Wait a minute and retry.',
+  INTERNAL_ERROR: 'Something went wrong on our side.',
+};
+
+const hint = HINTS[code];
+---
+
+<div class="tz-card border-danger/30 bg-danger-soft/40 px-4 py-4" role="alert">
+  <div class="flex items-start gap-3">
+    <svg
+      viewBox="0 0 24 24"
+      class="mt-0.5 h-5 w-5 shrink-0 text-danger"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9"></circle>
+      <path stroke-linecap="round" d="M12 7.5v5M12 16h.01"></path>
+    </svg>
+    <div class="min-w-0">
+      <p class="text-sm font-medium text-fg">{message}</p>
+      {hint !== undefined && <p class="mt-1 text-[13px] text-muted">{hint}</p>}
+      <p class="tz-mono mt-2 text-xs text-subtle">
+        {code}
+        {query !== undefined && <> · {query}</>}
+      </p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,40 @@
+---
+import CopyButton from '@/components/CopyButton.svelte';
+
+interface Props {
+  code: string;
+  /** Needed when a copy button has to find this block in the DOM. */
+  id?: string | undefined;
+  label?: string | undefined;
+  /** Show the copy control. */
+  copyable?: boolean | undefined;
+  /** Cap the height and scroll instead of growing the page. */
+  maxHeightClass?: string | undefined;
+  class?: string | undefined;
+}
+
+const {
+  code,
+  id,
+  label,
+  copyable = true,
+  maxHeightClass = 'max-h-[32rem]',
+  class: className,
+} = Astro.props;
+---
+
+<div class:list={['tz-card relative overflow-hidden', className]}>
+  {(label !== undefined || copyable) && (
+    <div class="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
+      <span class="tz-mono text-xs text-subtle">{label}</span>
+      {copyable && id !== undefined && <CopyButton client:visible targetId={id} />}
+    </div>
+  )}
+  <pre
+    id={id}
+    class:list={[
+      'tz-mono overflow-auto bg-surface px-3 py-3 text-[12.5px] leading-[1.55] text-fg',
+      maxHeightClass,
+    ]}
+  ><code>{code}</code></pre>
+</div>

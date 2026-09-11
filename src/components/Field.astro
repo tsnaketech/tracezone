@@ -1,0 +1,34 @@
+---
+interface Props {
+  label: string;
+  value?: string | null | undefined;
+  /** Render the value in the monospace face (domains, handles, IPs, IDs). */
+  mono?: boolean | undefined;
+  /** Turn the value into a link. */
+  href?: string | null | undefined;
+  /** Shown instead of an em dash when the value is absent. */
+  emptyLabel?: string | undefined;
+  /** Native tooltip, used to keep the original upstream value reachable. */
+  title?: string | undefined;
+}
+
+const { label, value, mono = false, href, emptyLabel = '—', title } = Astro.props;
+const hasValue = value !== null && value !== undefined && value !== '';
+---
+
+<div class="grid grid-cols-1 gap-0.5 py-1.5 sm:grid-cols-[minmax(9rem,auto)_1fr] sm:gap-4">
+  <dt class="text-[13px] text-muted">{label}</dt>
+  <dd class:list={['min-w-0 break-words text-[13px] text-fg', mono && 'tz-mono']} title={title}>
+    {hasValue ? (
+      href ? (
+        <a class="tz-link" href={href} rel="noopener noreferrer nofollow" target="_blank">
+          {value}
+        </a>
+      ) : (
+        value
+      )
+    ) : (
+      <span class="text-subtle">{emptyLabel}</span>
+    )}
+  </dd>
+</div>

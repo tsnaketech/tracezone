@@ -1,0 +1,25 @@
+---
+import Badge from '@/components/Badge.astro';
+import type { DnssecStatus } from '@/lib/lookup/types';
+
+interface Props {
+  status: DnssecStatus;
+}
+
+const { status } = Astro.props;
+
+const PRESENTATION: Record<
+  DnssecStatus,
+  { variant: 'success' | 'neutral' | 'warning'; label: string }
+> = {
+  signed: { variant: 'success', label: 'Signed' },
+  unsigned: { variant: 'neutral', label: 'Unsigned' },
+  unknown: { variant: 'warning', label: 'Unknown' },
+};
+
+const { variant, label } = PRESENTATION[status];
+---
+
+<Badge {variant} title={`DNSSEC: ${status}`}>
+  {label}
+</Badge>

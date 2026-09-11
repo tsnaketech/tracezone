@@ -1,0 +1,24 @@
+---
+import Badge from '@/components/Badge.astro';
+import { humanizeStatus, statusTone } from '@/lib/format';
+
+interface Props {
+  statuses: readonly string[];
+}
+
+const { statuses } = Astro.props;
+---
+
+{statuses.length === 0 ? (
+  <span class="text-[13px] text-subtle">No status reported.</span>
+) : (
+  <ul class="flex flex-wrap gap-1.5">
+    {statuses.map((status) => (
+      <li>
+        <Badge variant={statusTone(status)} title={status}>
+          {humanizeStatus(status)}
+        </Badge>
+      </li>
+    ))}
+  </ul>
+)}

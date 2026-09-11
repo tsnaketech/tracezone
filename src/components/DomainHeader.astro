@@ -1,0 +1,45 @@
+---
+import Badge from '@/components/Badge.astro';
+import DomainStatus from '@/components/DomainStatus.astro';
+import type { DomainLookupResult } from '@/lib/lookup/types';
+
+interface Props {
+  result: DomainLookupResult;
+}
+
+const { result } = Astro.props;
+const displayName = result.domain?.name ?? result.query.toUpperCase();
+---
+
+<div class="flex flex-col gap-4">
+  <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <h1 class="tz-mono text-xl font-semibold break-all text-fg sm:text-2xl">{displayName}</h1>
+    {result.registered ? (
+      <Badge variant="success">Registered</Badge>
+    ) : (
+      <Badge variant="warning">Possibly available</Badge>
+    )}
+    {result.domain?.unicodeName && result.domain.unicodeName !== displayName && (
+      <span class="tz-mono text-sm text-muted">{result.domain.unicodeName}</span>
+    )}
+  </div>
+
+  {result.registered && result.domain !== null && (
+    <DomainStatus statuses={result.domain.statuses} />
+  )}
+
+  {!result.registered && (
+    <p class="max-w-3xl text-sm text-muted">
+      RDAP does not report this domain as registered. Availability must still be confirmed with a
+      registrar.
+    </p>
+  )}
+
+  {result.warnings.length > 0 && (
+    <ul class="max-w-3xl space-y-1 text-xs text-subtle">
+      {result.warnings.map((warning) => (
+        <li>· {warning}</li>
+      ))}
+    </ul>
+  )}
+</div>

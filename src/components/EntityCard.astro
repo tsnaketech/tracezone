@@ -1,0 +1,64 @@
+---
+import Badge from '@/components/Badge.astro';
+import Card from '@/components/Card.astro';
+import Field from '@/components/Field.astro';
+import { humanizeRole } from '@/lib/format';
+import type { EntityInfo, RedactionInfo } from '@/lib/lookup/types';
+
+interface Props {
+  entities: readonly EntityInfo[];
+  redaction: RedactionInfo;
+}
+
+const { entities, redaction } = Astro.props;
+
+/**
+ * Registrar details already have their own card; showing them again here adds
+ * nothing. Everything else the registry chose to publish is listed as-is.
+ */
+const contacts = entities.filter((entity) => !entity.roles.includes('registrar'));
+---
+
+<Card title="Entities" meta={contacts.length === 0 ? undefined : String(contacts.length)}>
+  {redaction.applied && (
+    <p class="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-xs text-muted">
+      This registry redacts part of the registration data. TraceZone shows only what RDAP publishes.
+      {redaction.fields.length > 0 && (
+        <span class="mt-1 block text-subtle">Redacted: {redaction.fields.join(', ')}</span>
+      )}
+    </p>
+  )}
+
+  {contacts.length === 0 ? (
+    <p class="text-[13px] text-subtle">No public contact entity was published.</p>
+  ) : (
+    <div class="space-y-4">
+      {contacts.map((entity) => (
+        <div class="rounded-md border border-line bg-surface-2/50 px-3 py-2.5">
+          <div class="mb-1.5 flex flex-wrap gap-1.5">
+            {entity.roles.length === 0 ? (
+              <Badge>Contact</Badge>
+            ) : (
+              entity.roles.map((role) => <Badge variant="accent">{humanizeRole(role)}</Badge>)
+            )}
+          </div>
+          <dl class="divide-y divide-line/50">
+            <Field label="Name" value={entity.name} />
+            <Field label="Organization" value={entity.organization} />
+            <Field label="Email" value={entity.email} mono />
+            <Field label="Phone" value={entity.phone} mono />
+            <Field label="Address" value={entity.address} />
+            <Field label="Handle" value={entity.handle} mono />
+          </dl>
+          {entity.remarks.length > 0 && (
+            <ul class="mt-2 space-y-1 text-xs text-subtle">
+              {entity.remarks.map((remark) => (
+                <li>{[remark.title, ...remark.description].filter(Boolean).join(' — ')}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+    </div>
+  )}
+</Card>

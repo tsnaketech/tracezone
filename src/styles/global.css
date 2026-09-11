@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+
+/* Theme is driven by a `dark` class on <html>, set before paint by an inline
+   script in BaseLayout so there is no flash. Dark is the default. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Light palette. Cool neutrals, high contrast, no pure black or pure white. */
+:root {
+  --tz-bg: #fbfcfd;
+  --tz-surface: #ffffff;
+  --tz-surface-2: #f4f6f9;
+  --tz-border: #dfe4ea;
+  --tz-border-strong: #c3cbd6;
+  --tz-fg: #10141a;
+  --tz-fg-muted: #56606d;
+  --tz-fg-subtle: #7a838f;
+  --tz-accent: #1f6feb;
+  --tz-accent-soft: #e8f0fe;
+  --tz-on-accent: #ffffff;
+  --tz-success: #1a7f37;
+  --tz-success-soft: #e4f4e8;
+  --tz-warning: #9a6700;
+  --tz-warning-soft: #fdf3d8;
+  --tz-danger: #cf222e;
+  --tz-danger-soft: #fdeaea;
+  --tz-ring: color-mix(in oklab, var(--tz-accent) 55%, transparent);
+  color-scheme: light;
+}
+
+/* Dark palette — the default presentation. */
+.dark {
+  --tz-bg: #0a0c10;
+  --tz-surface: #11141a;
+  --tz-surface-2: #171b23;
+  --tz-border: #242935;
+  --tz-border-strong: #363d4d;
+  --tz-fg: #e7eaf0;
+  --tz-fg-muted: #969eac;
+  --tz-fg-subtle: #6d7583;
+  --tz-accent: #4c8dff;
+  --tz-accent-soft: #12233f;
+  --tz-on-accent: #06101f;
+  --tz-success: #3fb950;
+  --tz-success-soft: #10231a;
+  --tz-warning: #d29922;
+  --tz-warning-soft: #241d0d;
+  --tz-danger: #f85149;
+  --tz-danger-soft: #2a1416;
+  --tz-ring: color-mix(in oklab, var(--tz-accent) 55%, transparent);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--tz-bg);
+  --color-surface: var(--tz-surface);
+  --color-surface-2: var(--tz-surface-2);
+  --color-line: var(--tz-border);
+  --color-line-strong: var(--tz-border-strong);
+  --color-fg: var(--tz-fg);
+  --color-muted: var(--tz-fg-muted);
+  --color-subtle: var(--tz-fg-subtle);
+  --color-accent: var(--tz-accent);
+  --color-accent-soft: var(--tz-accent-soft);
+  --color-on-accent: var(--tz-on-accent);
+  --color-success: var(--tz-success);
+  --color-success-soft: var(--tz-success-soft);
+  --color-warning: var(--tz-warning);
+  --color-warning-soft: var(--tz-warning-soft);
+  --color-danger: var(--tz-danger);
+  --color-danger-soft: var(--tz-danger-soft);
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+  --font-mono:
+    ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+}
+
+@layer base {
+  html {
+    background-color: var(--tz-bg);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--tz-bg);
+    color: var(--tz-fg);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--tz-accent);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--tz-accent) 35%, transparent);
+  }
+
+  a {
+    color: inherit;
+  }
+
+  /* Scrollbars inside raw-data panes, kept unobtrusive. */
+  * {
+    scrollbar-color: var(--tz-border-strong) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+@layer components {
+  .tz-card {
+    @apply border-line bg-surface rounded-lg border;
+  }
+
+  .tz-mono {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+  }
+
+  .tz-link {
+    @apply text-accent decoration-accent/30 hover:decoration-accent underline underline-offset-2;
+  }
+}

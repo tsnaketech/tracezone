@@ -1,0 +1,26 @@
+---
+import Card from '@/components/Card.astro';
+import Field from '@/components/Field.astro';
+import type { RegistrarInfo } from '@/lib/lookup/types';
+
+interface Props {
+  registrar: RegistrarInfo | null;
+}
+
+const { registrar } = Astro.props;
+---
+
+<Card title="Registrar">
+  {registrar === null ? (
+    <p class="text-[13px] text-subtle">The registry published no registrar entity.</p>
+  ) : (
+    <dl class="divide-y divide-line/60">
+      <Field label="Name" value={registrar.name} />
+      <Field label="Handle" value={registrar.handle} mono />
+      <Field label="IANA ID" value={registrar.ianaId} mono />
+      <Field label="URL" value={registrar.url} href={registrar.url} mono />
+      <Field label="Abuse email" value={registrar.abuseEmail} mono />
+      <Field label="Abuse phone" value={registrar.abusePhone} mono />
+    </dl>
+  )}
+</Card>

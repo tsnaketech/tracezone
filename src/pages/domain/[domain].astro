@@ -1,0 +1,158 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import Card from '@/components/Card.astro';
+import DatesCard from '@/components/DatesCard.astro';
+import DnssecBadge from '@/components/DnssecBadge.astro';
+import DomainHeader from '@/components/DomainHeader.astro';
+import EntityCard from '@/components/EntityCard.astro';
+import ErrorMessage from '@/components/ErrorMessage.astro';
+import Field from '@/components/Field.astro';
+import NameserversCard from '@/components/NameserversCard.astro';
+import RawViewer from '@/components/RawViewer.astro';
+import SearchBar from '@/components/SearchBar.svelte';
+import RegistrarCard from '@/components/RegistrarCard.astro';
+import { toApiError } from '@/lib/api/errors';
+import { lookupCacheControl } from '@/lib/api/response';
+import { lookupDomain } from '@/lib/lookup/domain';
+import type { DomainLookupResult } from '@/lib/lookup/types';
+import { toJson, toToon } from '@/lib/serialization';
+import { decodeDomainParam, validateDomain } from '@/lib/validation/domain';
+
+export const prerender = false;
+
+const requested = decodeDomainParam(Astro.params.domain ?? '');
+
+// A shareable URL should be the canonical one: normalise first and redirect
+// rather than serving the same result under several addresses.
+const validation = validateDomain(requested);
+if (validation.ok && validation.domain !== requested) {
+  return Astro.redirect(`/domain/${encodeURIComponent(validation.domain)}`, 308);
+}
+
+let result: DomainLookupResult | null = null;
+let failure: { code: ReturnType<typeof toApiError>['code']; message: string } | null = null;
+
+try {
+  result = await lookupDomain(requested);
+} catch (error) {
+  const apiError = toApiError(error);
+  failure = { code: apiError.code, message: apiError.message };
+  Astro.response.status = apiError.status;
+}
+
+if (result !== null) {
+  Astro.response.headers.set('cache-control', lookupCacheControl(result.registered));
+} else {
+  Astro.response.headers.set('cache-control', 'no-store');
+}
+
+const displayName = result?.domain?.name ?? (validation.ok ? validation.domain : requested);
+const title = result === null ? `Lookup failed · ${requested}` : displayName;
+const description =
+  result === null
+    ? `RDAP lookup for ${requested} could not be completed.`
+    : `RDAP registration data, nameservers and registrar information for ${displayName}.`;
+
+const json = result === null ? '' : toJson(result);
+const toon = result === null ? '' : toToon(result);
+---
+
+<BaseLayout
+  title={title}
+  description={description}
+  canonicalPath={`/domain/${validation.ok ? validation.domain : requested}`}
+  noindex
+>
+  <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+    <div class="mb-8 max-w-2xl">
+      <SearchBar
+        client:load
+        initialValue={validation.ok ? validation.domain : requested}
+        size="sm"
+      />
+    </div>
+
+    {failure !== null ? (
+      <ErrorMessage code={failure.code} message={failure.message} query={requested} />
+    ) : (
+      result !== null && (
+        <div class="space-y-8">
+          <DomainHeader result={result} />
+
+          <RawViewer json={json} toon={toon}>
+            <div slot="overview" class="grid gap-4 lg:grid-cols-2">
+              <Card title="Domain">
+                <dl class="divide-y divide-line/60">
+                  <Field label="Name" value={result.domain?.name ?? result.query} mono />
+                  <Field label="Unicode name" value={result.domain?.unicodeName} mono />
+                  <Field label="Handle" value={result.domain?.handle} mono />
+                  <Field
+                    label="Query"
+                    value={result.query}
+                    mono
+                    title="The normalised name TraceZone looked up"
+                  />
+                  <Field label="Availability" value={result.availability.replace(/_/g, ' ')} mono />
+                </dl>
+              </Card>
+
+              <RegistrarCard registrar={result.registrar} />
+              <DatesCard dates={result.dates} />
+              <NameserversCard nameservers={result.nameservers} />
+
+              <Card title="DNSSEC">
+                <div class="flex flex-wrap items-center gap-3">
+                  <DnssecBadge status={result.dnssec?.status ?? 'unknown'} />
+                  {result.dnssec !== null && result.dnssec.dsRecords.length > 0 && (
+                    <span class="tz-mono text-xs text-subtle">
+                      {result.dnssec.dsRecords.length} DS record
+                      {result.dnssec.dsRecords.length === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+                {result.dnssec !== null && result.dnssec.dsRecords.length > 0 && (
+                  <ul class="tz-mono mt-3 space-y-1 text-xs text-muted">
+                    {result.dnssec.dsRecords.map((record) => (
+                      <li>
+                        keyTag={record.keyTag ?? '—'} · alg={record.algorithm ?? '—'} · digest=
+                        {record.digestType ?? '—'}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+
+              <EntityCard entities={result.entities} redaction={result.redaction} />
+
+              <Card title="Source" class="lg:col-span-2">
+                <dl class="divide-y divide-line/60">
+                  <Field label="Protocol" value={result.source.protocol.toUpperCase()} mono />
+                  <Field label="Resolved via" value={result.source.resolvedVia} mono />
+                  <Field label="Endpoint" value={result.source.url} mono />
+                  <Field label="Retrieved at" value={result.source.retrievedAt} mono />
+                </dl>
+              </Card>
+
+              {result.notices.length > 0 && (
+                <Card title="Registry notices" class="lg:col-span-2">
+                  <ul class="space-y-3">
+                    {result.notices.map((notice) => (
+                      <li>
+                        {notice.title !== null && (
+                          <p class="text-[13px] font-medium text-fg">{notice.title}</p>
+                        )}
+                        <p class="text-[13px] leading-relaxed text-muted">
+                          {notice.description.join(' ')}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+            </div>
+          </RawViewer>
+        </div>
+      )
+    )}
+  </div>
+</BaseLayout>

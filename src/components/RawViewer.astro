@@ -1,0 +1,115 @@
+---
+import CodeBlock from '@/components/CodeBlock.astro';
+
+interface Props {
+  json: string;
+  toon: string;
+}
+
+const { json, toon } = Astro.props;
+
+const TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'json', label: 'JSON' },
+  { id: 'toon', label: 'TOON' },
+] as const;
+---
+
+{/*
+  The three panes are all server-rendered; the script below only toggles which
+  one is visible. That keeps the whole result readable (and copyable) without
+  JavaScript, and avoids shipping the payload twice as island props.
+*/}
+<div class="tz-tabs" data-tabs>
+  <div
+    class="mb-4 inline-flex items-center gap-1 rounded-lg border border-line bg-surface p-1"
+    role="tablist"
+    aria-label="Result view"
+  >
+    {TABS.map((tab, index) => (
+      <button
+        type="button"
+        role="tab"
+        id={`tz-tab-${tab.id}`}
+        data-tab={tab.id}
+        aria-controls={`tz-panel-${tab.id}`}
+        aria-selected={index === 0 ? 'true' : 'false'}
+        tabindex={index === 0 ? 0 : -1}
+        class="rounded-md px-3 py-1.5 text-[13px] text-muted transition-colors hover:text-fg aria-selected:bg-surface-2 aria-selected:text-fg"
+      >
+        {tab.label}
+      </button>
+    ))}
+  </div>
+
+  <div
+    role="tabpanel"
+    id="tz-panel-overview"
+    aria-labelledby="tz-tab-overview"
+    data-panel="overview"
+  >
+    <slot name="overview" />
+  </div>
+
+  <div role="tabpanel" id="tz-panel-json" aria-labelledby="tz-tab-json" data-panel="json" hidden>
+    <CodeBlock id="tz-raw-json" label="application/json" code={json} />
+  </div>
+
+  <div role="tabpanel" id="tz-panel-toon" aria-labelledby="tz-tab-toon" data-panel="toon" hidden>
+    <CodeBlock id="tz-raw-toon" label="text/toon" code={toon} />
+  </div>
+</div>
+
+<script>
+  /**
+   * Progressive enhancement for the result tabs: without this script every pane
+   * stays in the document and the page still renders the full result.
+   */
+  function initTabs(root: HTMLElement): void {
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-tab]'));
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('[data-panel]'));
+    if (tabs.length === 0) return;
+
+    function select(name: string, focus = false): void {
+      for (const tab of tabs) {
+        const active = tab.dataset.tab === name;
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+        if (active && focus) tab.focus();
+      }
+      for (const panel of panels) {
+        panel.hidden = panel.dataset.panel !== name;
+      }
+      const url = new URL(window.location.href);
+      if (name === 'overview') url.searchParams.delete('view');
+      else url.searchParams.set('view', name);
+      window.history.replaceState(null, '', url);
+    }
+
+    for (const tab of tabs) {
+      tab.addEventListener('click', () => select(tab.dataset.tab ?? 'overview'));
+    }
+
+    root.addEventListener('keydown', (event) => {
+      if (!(event.target instanceof HTMLElement) || !event.target.hasAttribute('data-tab')) return;
+      const index = tabs.indexOf(event.target as HTMLButtonElement);
+      if (index === -1) return;
+
+      let next: number;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = tabs.length - 1;
+      else return;
+
+      event.preventDefault();
+      select(tabs[next]?.dataset.tab ?? 'overview', true);
+    });
+
+    // Honour a deep link such as /domain/example.com?view=toon
+    const requested = new URL(window.location.href).searchParams.get('view');
+    if (requested === 'json' || requested === 'toon') select(requested);
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-tabs]').forEach(initTabs);
+</script>

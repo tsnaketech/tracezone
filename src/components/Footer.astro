@@ -1,0 +1,23 @@
+---
+import { APP_NAME, APP_REPOSITORY } from '@/lib/config';
+---
+
+<footer class="mt-16 border-t border-line">
+  <div class="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-subtle sm:flex-row sm:items-center sm:justify-between sm:px-6">
+    <p>
+      {APP_NAME} — data sourced live from RDAP registries. Registration data is published by the
+      registries themselves and may be redacted.
+    </p>
+    <div class="flex items-center gap-4">
+      <a class="hover:text-fg" href="/docs">
+        API
+      </a>
+      <a class="hover:text-fg" href="/api/health">
+        Health
+      </a>
+      <a class="hover:text-fg" href={APP_REPOSITORY} rel="noopener noreferrer" target="_blank">
+        Source
+      </a>
+    </div>
+  </div>
+</footer>

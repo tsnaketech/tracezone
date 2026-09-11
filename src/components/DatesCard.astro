@@ -1,0 +1,44 @@
+---
+import Card from '@/components/Card.astro';
+import type { DomainDates } from '@/lib/lookup/types';
+import { formatDate, formatRelative } from '@/lib/format';
+
+interface Props {
+  dates: DomainDates | null;
+}
+
+const { dates } = Astro.props;
+
+/** Label, ISO value — the ISO string stays in the `title` and `datetime`. */
+const rows: ReadonlyArray<readonly [string, string | null]> =
+  dates === null
+    ? []
+    : [
+        ['Created', dates.created],
+        ['Updated', dates.updated],
+        ['Expires', dates.expires],
+        ['Transferred', dates.transferred],
+      ];
+
+const visible = rows.filter(([, value]) => value !== null);
+---
+
+<Card title="Dates">
+  {visible.length === 0 ? (
+    <p class="text-[13px] text-subtle">The registry published no dates.</p>
+  ) : (
+    <dl class="divide-y divide-line/60">
+      {visible.map(([label, iso]) => (
+        <div class="grid grid-cols-1 gap-0.5 py-1.5 sm:grid-cols-[minmax(9rem,auto)_1fr] sm:gap-4">
+          <dt class="text-[13px] text-muted">{label}</dt>
+          <dd class="min-w-0 text-[13px] text-fg">
+            <time class="tz-mono" datetime={iso} title={iso}>
+              {formatDate(iso)}
+            </time>
+            <span class="ml-2 text-subtle">{formatRelative(iso)}</span>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )}
+</Card>
