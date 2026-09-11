@@ -1,0 +1,8 @@
+allowBuilds:
+  esbuild: true
+
+# A flat node_modules tree. Astro's build output and the Vercel adapter's
+# function bundler both resolve dependencies by walking up from the build
+# output directory, which pnpm's default isolated layout does not support
+# without symlinks. Hoisting keeps `pnpm build` identical on every platform.
+nodeLinker: hoisted

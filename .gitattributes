@@ -1,0 +1,9 @@
+# Normalise to LF in the repository and in every working copy, so Prettier's
+# `endOfLine: lf` check behaves the same on Windows, macOS and Linux.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
