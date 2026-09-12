@@ -1,6 +1,17 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { EXAMPLE_DOMAINS } from '@/lib/config';
   import { validateDomain } from '@/lib/validation/domain';
+
+  /**
+   * How long to keep the form locked after starting a navigation.
+   *
+   * A lookup is a full page navigation, so in the normal case the next document
+   * replaces this component long before this fires. It only matters when the
+   * navigation never lands — the user pressed Escape, went offline, or the
+   * registry is slow — and exists so the form can never stay locked forever.
+   */
+  const NAVIGATION_WATCHDOG_MS = 15_000;
 
   /**
    * The lookup entry point. Validation runs with the exact same module the API
@@ -39,6 +50,34 @@
       : null;
   });
 
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
+
+  function unlock(): void {
+    clearTimeout(watchdog);
+    submitting = false;
+  }
+
+  onMount(() => {
+    /**
+     * Recover the form whenever this page is shown again.
+     *
+     * `submitting` is normally discarded along with the whole component when the
+     * lookup navigates away. It is *not* discarded when the browser restores the
+     * page from the back/forward cache: the component comes back holding the
+     * state it had when the user left, so the button would stay on "Looking up…"
+     * and every later submit would hit the `if (submitting) return` guard —
+     * leaving the search box permanently dead after the first lookup.
+     *
+     * `pageshow` fires both on a normal load and on a bfcache restore, so
+     * resetting here covers both without needing to inspect `event.persisted`.
+     */
+    window.addEventListener('pageshow', unlock);
+    return () => {
+      clearTimeout(watchdog);
+      window.removeEventListener('pageshow', unlock);
+    };
+  });
+
   function submit(event?: Event): void {
     event?.preventDefault();
     if (submitting) return;
@@ -51,6 +90,8 @@
 
     error = null;
     submitting = true;
+    clearTimeout(watchdog);
+    watchdog = setTimeout(unlock, NAVIGATION_WATCHDOG_MS);
     window.location.assign(`/domain/${encodeURIComponent(result.domain)}`);
   }
 
