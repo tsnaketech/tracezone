@@ -1,10 +1,5 @@
 User-agent: *
 Allow: /$
 Allow: /docs
-
-# Temporarily open to crawlers while the site is new.
-# Re-enable these to keep generated lookup URLs and the API out of search
-# indexes — one crawlable URL exists per domain ever looked up, which is
-# effectively unbounded.
-# Disallow: /domain/
-# Disallow: /api/
+Disallow: /domain/
+Disallow: /api/
