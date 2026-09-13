@@ -12,16 +12,46 @@ export const APP_DESCRIPTION =
   'Inspect domain registration data, nameservers, registrar information and RDAP records.';
 export const APP_REPOSITORY = 'https://github.com/tsnaketech/tracezone';
 
-/** Upstream RDAP request budget. */
-export const RDAP_TIMEOUT_MS = 8_000;
+/**
+ * Time budget, from the outside in.
+ *
+ * The invariant that matters: LOOKUP_DEADLINE_MS must stay comfortably below
+ * FUNCTION_MAX_DURATION_S, so the lookup always gives up on its own terms and
+ * returns a clean UPSTREAM_TIMEOUT. If the platform kills the invocation first,
+ * the caller gets an opaque platform error instead. `tests/budget.test.ts`
+ * guards the ordering.
+ */
+
+/**
+ * Serverless function ceiling, in seconds. Kept deliberately low — every plan
+ * allows at least this much, so the deployment cannot fail on a plan limit.
+ * Mirrored in `astro.config.mjs`, which is where the adapter reads it.
+ */
+export const FUNCTION_MAX_DURATION_S = 10;
+
+/** Whole-lookup budget, shared by every upstream call the lookup makes. */
+export const LOOKUP_DEADLINE_MS = 8_000;
+
+/** Per-request RDAP budget. Also capped by whatever the deadline has left. */
+export const RDAP_TIMEOUT_MS = 5_000;
+
 /** Timeout for the IANA bootstrap document (cheap to skip, so keep it short). */
-export const BOOTSTRAP_TIMEOUT_MS = 4_000;
+export const BOOTSTRAP_TIMEOUT_MS = 3_000;
 /** Hard cap on any upstream response body we are willing to buffer. */
 export const MAX_UPSTREAM_BYTES = 2 * 1024 * 1024;
 /** Maximum number of HTTP redirects followed when talking to an RDAP server. */
 export const MAX_REDIRECTS = 3;
 /** How long the IANA bootstrap registry is reused inside a single instance. */
 export const BOOTSTRAP_TTL_MS = 24 * 60 * 60 * 1_000;
+
+/**
+ * How long a *failed* bootstrap fetch is remembered.
+ *
+ * Without this, every lookup — and every candidate within a lookup — re-pays
+ * BOOTSTRAP_TIMEOUT_MS for as long as IANA is unreachable, which is exactly when
+ * the budget is most precious. Short enough to recover quickly once it is back.
+ */
+export const BOOTSTRAP_FAILURE_TTL_MS = 60_000;
 
 /**
  * RDAP redirector used when the IANA bootstrap registry is unreachable or has

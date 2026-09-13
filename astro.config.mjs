@@ -12,7 +12,13 @@ const site = process.env.PUBLIC_SITE_URL ?? 'https://tracezone.vercel.app';
 export default defineConfig({
   site,
   output: 'static',
-  adapter: vercel(),
+  adapter: vercel({
+    // Keep in sync with FUNCTION_MAX_DURATION_S in src/lib/config.ts. It must
+    // stay above LOOKUP_DEADLINE_MS so a slow registry produces our own
+    // UPSTREAM_TIMEOUT rather than an opaque platform timeout page. Ten seconds
+    // is allowed on every plan, so the deployment cannot fail on a plan limit.
+    maxDuration: 10,
+  }),
   integrations: [svelte()],
   vite: {
     plugins: [tailwindcss()],

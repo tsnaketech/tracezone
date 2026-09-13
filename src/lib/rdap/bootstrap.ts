@@ -10,7 +10,13 @@
  * to rdap.org, which performs the same resolution server-side.
  */
 
-import { BOOTSTRAP_TIMEOUT_MS, BOOTSTRAP_TTL_MS, RDAP_USER_AGENT } from '@/lib/config';
+import {
+  BOOTSTRAP_FAILURE_TTL_MS,
+  BOOTSTRAP_TIMEOUT_MS,
+  BOOTSTRAP_TTL_MS,
+  RDAP_USER_AGENT,
+} from '@/lib/config';
+import { unlimitedDeadline, type Deadline } from '@/lib/net/deadline';
 import { safeFetch } from '@/lib/net/safe-fetch';
 import type { RdapBootstrapRegistry } from '@/lib/rdap/types';
 
@@ -22,6 +28,8 @@ export type BootstrapMap = ReadonlyMap<string, readonly string[]>;
 interface CacheEntry {
   readonly map: BootstrapMap;
   readonly fetchedAt: number;
+  /** How long this entry stays fresh — short when it records a failure. */
+  readonly ttlMs: number;
 }
 
 let cache: CacheEntry | null = null;
@@ -50,9 +58,9 @@ export function parseBootstrap(registry: RdapBootstrapRegistry): BootstrapMap {
   return map;
 }
 
-async function loadBootstrap(): Promise<BootstrapMap> {
+async function loadBootstrap(deadline: Deadline): Promise<BootstrapMap> {
   const response = await safeFetch(BOOTSTRAP_URL, {
-    timeoutMs: BOOTSTRAP_TIMEOUT_MS,
+    timeoutMs: deadline.budget(BOOTSTRAP_TIMEOUT_MS),
     headers: { accept: 'application/json', 'user-agent': RDAP_USER_AGENT },
   });
   if (!response.ok) throw new Error(`bootstrap responded with ${response.status}`);
@@ -63,22 +71,35 @@ async function loadBootstrap(): Promise<BootstrapMap> {
  * Return the cached bootstrap map, refreshing it when stale.
  *
  * A failure is never fatal: callers treat an empty map as "no entry" and fall
- * back to the redirector.
+ * back to the redirector. Failures are cached too, briefly — otherwise every
+ * lookup re-pays the timeout for as long as IANA is down, which is precisely
+ * when the caller can least afford it.
  */
-export async function getBootstrap(): Promise<BootstrapMap> {
-  if (cache !== null && Date.now() - cache.fetchedAt < BOOTSTRAP_TTL_MS) {
+export async function getBootstrap(
+  deadline: Deadline = unlimitedDeadline(),
+): Promise<BootstrapMap> {
+  if (cache !== null && Date.now() - cache.fetchedAt < cache.ttlMs) {
     return cache.map;
   }
   if (inFlight !== null) return inFlight;
 
-  inFlight = loadBootstrap()
+  // Not worth spending what little budget is left on a registry we can work
+  // without: fall straight through to the redirector.
+  if (deadline.budget(BOOTSTRAP_TIMEOUT_MS) <= 0) {
+    return cache?.map ?? new Map<string, readonly string[]>();
+  }
+
+  inFlight = loadBootstrap(deadline)
     .then((map) => {
-      cache = { map, fetchedAt: Date.now() };
+      cache = { map, fetchedAt: Date.now(), ttlMs: BOOTSTRAP_TTL_MS };
       return map;
     })
     .catch(() => {
-      // Keep a stale map if we have one; otherwise report "unknown".
-      return cache?.map ?? new Map<string, readonly string[]>();
+      // Keep a stale map if we have one; otherwise report "unknown". Either way
+      // remember the failure so the next caller does not wait on it again.
+      const map = cache?.map ?? new Map<string, readonly string[]>();
+      cache = { map, fetchedAt: Date.now(), ttlMs: BOOTSTRAP_FAILURE_TTL_MS };
+      return map;
     })
     .finally(() => {
       inFlight = null;
@@ -94,7 +115,7 @@ export function resetBootstrapCache(): void {
 }
 
 /** The authoritative RDAP base URL for a TLD, or `null` when unknown. */
-export async function resolveRdapBase(tld: string): Promise<string | null> {
-  const map = await getBootstrap();
+export async function resolveRdapBase(tld: string, deadline?: Deadline): Promise<string | null> {
+  const map = await getBootstrap(deadline);
   return map.get(tld.toLowerCase())?.[0] ?? null;
 }

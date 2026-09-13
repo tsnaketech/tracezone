@@ -1,7 +1,14 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import CodeBlock from '@/components/CodeBlock.astro';
-import { APP_NAME, RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_MS } from '@/lib/config';
+import {
+  APP_NAME,
+  FUNCTION_MAX_DURATION_S,
+  LOOKUP_DEADLINE_MS,
+  RATE_LIMIT_MAX_REQUESTS,
+  RATE_LIMIT_WINDOW_MS,
+  RDAP_TIMEOUT_MS,
+} from '@/lib/config';
 
 const BASE = 'https://tracezone.vercel.app';
 
@@ -285,8 +292,14 @@ const windowSeconds = Math.round(RATE_LIMIT_WINDOW_MS / 1000);
             Errors are never cached.
           </li>
           <li>
-            <strong class="text-fg">Upstream budget.</strong> RDAP requests time out after 8 seconds
-            and responses larger than 2 MB are refused.
+            <strong class="text-fg">Upstream budget.</strong> A lookup may query several names (see
+            the <code class="tz-mono text-fg">www</code> note above), so the whole operation shares
+            one {LOOKUP_DEADLINE_MS / 1000}-second budget rather than each request having its own: a
+            single RDAP request gets {RDAP_TIMEOUT_MS / 1000} seconds or whatever is left, whichever
+            is smaller. The budget sits below the {FUNCTION_MAX_DURATION_S}-second function limit on
+            purpose, so a slow registry produces a clean{' '}
+            <code class="tz-mono text-fg">UPSTREAM_TIMEOUT</code> rather than an opaque platform
+            error. Responses larger than 2 MB are refused.
           </li>
         </ul>
       </section>

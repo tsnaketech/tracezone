@@ -164,7 +164,7 @@ Errors are rendered in the negotiated format, so a TOON client never receives a 
 | `INTERNAL_ERROR`       | 500  | Unexpected failure. Never carries internal detail.         |
 | `RDAP_UNSUPPORTED_TLD` | 501  | This TLD publishes no RDAP service (`.de`, `.io`, `.cn`…). |
 | `RDAP_ERROR`           | 502  | The registry answered with an error.                       |
-| `UPSTREAM_TIMEOUT`     | 504  | The registry did not answer within the 8 s budget.         |
+| `UPSTREAM_TIMEOUT`     | 504  | The lookup ran out of its 8 s budget.                      |
 
 A non-GET request carrying no matching `Origin` header is rejected with a
 plain-text `403` by the framework's cross-site guard before it reaches the
@@ -199,8 +199,15 @@ Reports that the deployment is serving. It does not probe RDAP registries.
   involved, which is what makes the wildcard safe.
 - **Caching** — successful lookups are cached at the edge for 1 hour with a 1-day
   `stale-while-revalidate`; unregistered answers for 5 minutes; errors are never cached.
-- **Upstream budget** — RDAP requests time out after 8 s, responses over 2 MB are refused, and at
-  most 3 redirects are followed.
+- **Upstream budget** — a lookup may query several names, so the whole operation shares a single
+  8 s deadline rather than giving each request its own; an individual RDAP request gets 5 s or
+  whatever is left of the deadline, whichever is smaller. That deadline sits below the 10 s
+  serverless function limit (`maxDuration`, set in `astro.config.mjs`) on purpose: the lookup always
+  gives up on its own terms and returns `UPSTREAM_TIMEOUT`, instead of being killed mid-flight and
+  handing the caller an opaque platform error. Responses over 2 MB are refused and at most 3
+  redirects are followed.
+- **Registry bootstrap** — the IANA registry is cached for 24 h per instance; a _failed_ fetch is
+  cached for 60 s so an outage is not re-paid on every lookup.
 
 ---
 

@@ -8,6 +8,7 @@
  */
 
 import { RDAP_FALLBACK_BASE, RDAP_TIMEOUT_MS, RDAP_USER_AGENT } from '@/lib/config';
+import { unlimitedDeadline, type Deadline } from '@/lib/net/deadline';
 import { SafeFetchError, safeFetch } from '@/lib/net/safe-fetch';
 import { getBootstrap } from '@/lib/rdap/bootstrap';
 import type { RdapDomain, RdapErrorResponse } from '@/lib/rdap/types';
@@ -63,11 +64,12 @@ function describeSafeFetchError(error: SafeFetchError): {
   }
 }
 
-async function query(url: string, via: RdapVia): Promise<RdapOutcome> {
+async function query(url: string, via: RdapVia, deadline: Deadline): Promise<RdapOutcome> {
   let response;
   try {
     response = await safeFetch(url, {
-      timeoutMs: RDAP_TIMEOUT_MS,
+      // Whichever runs out first: this request's own budget, or the lookup's.
+      timeoutMs: deadline.budget(RDAP_TIMEOUT_MS),
       headers: {
         accept: 'application/rdap+json, application/json;q=0.9',
         'user-agent': RDAP_USER_AGENT,
@@ -153,23 +155,38 @@ async function query(url: string, via: RdapVia): Promise<RdapOutcome> {
  * The authoritative endpoint from the IANA bootstrap registry is tried first;
  * rdap.org is used when the TLD is unknown to the registry, or when the
  * authoritative server is unreachable.
+ *
+ * Every request draws from the shared `deadline`, so the fan-out here cannot
+ * push the whole lookup past its budget.
  */
-export async function lookupRdapDomain(domain: string): Promise<RdapOutcome> {
-  const bootstrap = await getBootstrap();
+export async function lookupRdapDomain(
+  domain: string,
+  deadline: Deadline = unlimitedDeadline(),
+): Promise<RdapOutcome> {
+  const bootstrap = await getBootstrap(deadline);
   const base = bootstrap.get(tldOf(domain))?.[0] ?? null;
 
   if (base !== null) {
-    const outcome = await query(buildDomainUrl(base, domain), 'iana-bootstrap');
+    const outcome = await query(buildDomainUrl(base, domain), 'iana-bootstrap', deadline);
     if (outcome.kind !== 'error') return outcome;
 
     // The authoritative server is unhappy — give the redirector one chance
-    // before giving up, unless the failure was our own safety policy.
-    if (outcome.reason === 'blocked') return outcome;
-    const fallback = await query(buildDomainUrl(RDAP_FALLBACK_BASE, domain), 'rdap-redirector');
+    // before giving up, unless the failure was our own safety policy, or there
+    // is no budget left to spend on a second attempt.
+    if (outcome.reason === 'blocked' || deadline.expired()) return outcome;
+    const fallback = await query(
+      buildDomainUrl(RDAP_FALLBACK_BASE, domain),
+      'rdap-redirector',
+      deadline,
+    );
     return fallback.kind === 'error' ? outcome : fallback;
   }
 
-  const fallback = await query(buildDomainUrl(RDAP_FALLBACK_BASE, domain), 'rdap-redirector');
+  const fallback = await query(
+    buildDomainUrl(RDAP_FALLBACK_BASE, domain),
+    'rdap-redirector',
+    deadline,
+  );
   // rdap.org answers 404 both for "no such domain" and "no such TLD". We can
   // only tell the two apart when the bootstrap registry actually loaded: a TLD
   // missing from a populated registry genuinely has no RDAP service. When the

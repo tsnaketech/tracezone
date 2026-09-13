@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createDeadline } from '@/lib/net/deadline';
 import type * as RdapClientModule from '@/lib/rdap/client';
 import type { RdapOutcome } from '@/lib/rdap/client';
 import { exampleComRdap } from './fixtures/rdap-example-com';
 
-const lookupRdapDomain = vi.hoisted(() => vi.fn<(domain: string) => Promise<RdapOutcome>>());
+const lookupRdapDomain = vi.hoisted(() =>
+  vi.fn<(domain: string, deadline?: unknown) => Promise<RdapOutcome>>(),
+);
 
 vi.mock('@/lib/rdap/client', async (importOriginal) => {
   const actual = await importOriginal<typeof RdapClientModule>();
@@ -36,7 +39,7 @@ describe('lookupDomain', () => {
 
     const result = await lookupDomain('  HTTPS://Example.com/path  ');
 
-    expect(lookupRdapDomain).toHaveBeenCalledWith('example.com');
+    expect(lookupRdapDomain).toHaveBeenCalledWith('example.com', expect.anything());
     expect(result).toMatchObject({
       query: 'example.com',
       type: 'domain',
@@ -77,7 +80,7 @@ describe('lookupDomain', () => {
     const result = await lookupDomain('www.example.com');
 
     expect(lookupRdapDomain).toHaveBeenCalledTimes(1);
-    expect(lookupRdapDomain).toHaveBeenCalledWith('example.com');
+    expect(lookupRdapDomain).toHaveBeenCalledWith('example.com', expect.anything());
     expect(result.query).toBe('www.example.com');
     expect(result.warnings.join(' ')).toContain('example.com');
   });
@@ -87,8 +90,8 @@ describe('lookupDomain', () => {
 
     const result = await lookupDomain('shop.example.co.uk');
 
-    expect(lookupRdapDomain).toHaveBeenNthCalledWith(1, 'shop.example.co.uk');
-    expect(lookupRdapDomain).toHaveBeenNthCalledWith(2, 'example.co.uk');
+    expect(lookupRdapDomain).toHaveBeenNthCalledWith(1, 'shop.example.co.uk', expect.anything());
+    expect(lookupRdapDomain).toHaveBeenNthCalledWith(2, 'example.co.uk', expect.anything());
     expect(result.registered).toBe(true);
   });
 
@@ -139,5 +142,28 @@ describe('lookupDomain', () => {
     lookupRdapDomain.mockResolvedValue(NOT_FOUND);
     const absent = await lookupDomain('nope-1234.com');
     expect(absent.registered).toBe(false);
+  });
+
+  it('gives up with UPSTREAM_TIMEOUT rather than overrunning its budget', async () => {
+    // Walking up to a parent domain is the one place a lookup fans out. With no
+    // budget left it must stop there: overrunning means the platform kills the
+    // invocation and the caller gets an opaque error page instead of ours.
+    lookupRdapDomain.mockResolvedValue(FOUND);
+
+    await expect(
+      lookupDomain('example.com', { deadline: createDeadline(0) }),
+    ).rejects.toMatchObject({ code: 'UPSTREAM_TIMEOUT', status: 504 });
+
+    expect(lookupRdapDomain).not.toHaveBeenCalled();
+  });
+
+  it('passes one shared deadline to every candidate', async () => {
+    lookupRdapDomain.mockResolvedValueOnce(NOT_FOUND).mockResolvedValueOnce(FOUND);
+
+    await lookupDomain('shop.example.co.uk');
+
+    const deadlines = lookupRdapDomain.mock.calls.map((call) => call[1]);
+    expect(deadlines).toHaveLength(2);
+    expect(deadlines[0]).toBe(deadlines[1]);
   });
 });

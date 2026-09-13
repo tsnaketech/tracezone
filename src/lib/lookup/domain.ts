@@ -7,6 +7,8 @@
  */
 
 import { ApiError } from '@/lib/api/errors';
+import { LOOKUP_DEADLINE_MS } from '@/lib/config';
+import { createDeadline, type Deadline } from '@/lib/net/deadline';
 import type { DomainLookupResult, LookupSource } from '@/lib/lookup/types';
 import { lookupRdapDomain, type RdapOutcome } from '@/lib/rdap/client';
 import {
@@ -25,6 +27,12 @@ import { domainCandidates, validateDomain } from '@/lib/validation/domain';
 export interface DomainLookupOptions {
   /** Include the untouched RDAP payload in the result. Defaults to `true`. */
   readonly includeRaw?: boolean;
+  /**
+   * Wall-clock budget for the whole lookup, upstream calls included. Defaults
+   * to {@link LOOKUP_DEADLINE_MS}, which is set below the serverless function's
+   * own limit so we always answer before the platform cuts us off.
+   */
+  readonly deadline?: Deadline;
 }
 
 function emptySource(): LookupSource {
@@ -112,6 +120,7 @@ export async function lookupDomain(
   options: DomainLookupOptions = {},
 ): Promise<DomainLookupResult> {
   const includeRaw = options.includeRaw ?? true;
+  const deadline = options.deadline ?? createDeadline(LOOKUP_DEADLINE_MS);
 
   const validation = validateDomain(rawInput);
   if (!validation.ok) {
@@ -128,7 +137,16 @@ export async function lookupDomain(
   let lastOutcome: RdapOutcome | null = null;
 
   for (const [index, candidate] of candidates.entries()) {
-    const outcome = await lookupRdapDomain(candidate);
+    // Walking up the tree is the one place the lookup fans out, so check the
+    // budget before spending it rather than after.
+    if (deadline.expired()) {
+      throw new ApiError(
+        'UPSTREAM_TIMEOUT',
+        'The lookup ran out of time before every candidate name could be checked.',
+      );
+    }
+
+    const outcome = await lookupRdapDomain(candidate, deadline);
     lastOutcome = outcome;
 
     if (outcome.kind === 'found') {
