@@ -85,11 +85,11 @@ curl -H "Accept: text/toon" "https://tracezone.vercel.app/api/v1/domain/example.
 curl "https://tracezone.vercel.app/api/v1/domain/example.com?raw=false"
 ```
 
-| Parameter | In    | Values         | Notes                                                         |
-| --------- | ----- | -------------- | ------------------------------------------------------------- |
-| `:domain` | path  | required       | URLs, trailing dots, uppercase and IDN input are normalised.  |
-| `format`  | query | `json`, `toon` | **Takes precedence over `Accept`.** Unknown values are a 400. |
-| `raw`     | query | `true`/`false` | Include the untouched RDAP object. Defaults to `true`.        |
+| Parameter | In    | Values         | Notes                                                                                                               |
+| --------- | ----- | -------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `:domain` | path  | required       | URLs, trailing dots, uppercase and IDN input are normalised.                                                        |
+| `format`  | query | `json`, `toon` | **Takes precedence over `Accept`.** Unknown values are a 400.                                                       |
+| `raw`     | query | `true`/`false` | Include the untouched RDAP object. Defaults to `true`. Also accepts `1`/`0` and `yes`/`no`; anything else is a 400. |
 
 The response is a TraceZone document, not an RDAP passthrough — field names are stable across
 registries and dates are ISO 8601:
@@ -154,16 +154,29 @@ with HTTP 200 and `registered: false`, `availability: "possibly_available"`.
 
 Errors are rendered in the negotiated format, so a TOON client never receives a JSON error body.
 
-| Code                 | HTTP | Meaning                                            |
-| -------------------- | ---- | -------------------------------------------------- |
-| `INVALID_DOMAIN`     | 400  | The name could not be parsed unambiguously.        |
-| `INVALID_FORMAT`     | 400  | `?format=` named an unsupported format.            |
-| `DOMAIN_NOT_FOUND`   | 404  | No RDAP service is published for this TLD.         |
-| `METHOD_NOT_ALLOWED` | 405  | Only `GET` is accepted.                            |
-| `RATE_LIMITED`       | 429  | Too many requests; see `Retry-After`.              |
-| `INTERNAL_ERROR`     | 500  | Unexpected failure. Never carries internal detail. |
-| `RDAP_ERROR`         | 502  | The registry answered with an error.               |
-| `UPSTREAM_TIMEOUT`   | 504  | The registry did not answer within the 8 s budget. |
+| Code                   | HTTP | Meaning                                                    |
+| ---------------------- | ---- | ---------------------------------------------------------- |
+| `INVALID_DOMAIN`       | 400  | The name could not be parsed unambiguously.                |
+| `INVALID_FORMAT`       | 400  | `?format=` named an unsupported format.                    |
+| `INVALID_PARAMETER`    | 400  | A query parameter carried an unsupported value.            |
+| `METHOD_NOT_ALLOWED`   | 405  | Only `GET` and `OPTIONS` are accepted.                     |
+| `RATE_LIMITED`         | 429  | Too many requests; see `Retry-After`.                      |
+| `INTERNAL_ERROR`       | 500  | Unexpected failure. Never carries internal detail.         |
+| `RDAP_UNSUPPORTED_TLD` | 501  | This TLD publishes no RDAP service (`.de`, `.io`, `.cn`…). |
+| `RDAP_ERROR`           | 502  | The registry answered with an error.                       |
+| `UPSTREAM_TIMEOUT`     | 504  | The registry did not answer within the 8 s budget.         |
+
+A non-GET request carrying no matching `Origin` header is rejected with a
+plain-text `403` by the framework's cross-site guard before it reaches the
+endpoint, so it does not use the envelope above; with a matching `Origin` you get
+the expected `405`. The API is read-only, so the guard protects nothing here, but
+it is left in place rather than disabled globally.
+
+`DOMAIN_NOT_FOUND` (404) exists in the vocabulary but the domain endpoint never
+returns it: a name no registry knows is a _successful_ lookup reporting
+`registered: false`. It is reserved for lookup kinds where absence is a genuine
+error. Note the distinction `RDAP_UNSUPPORTED_TLD` draws — `denic.de` is plainly
+registered; `.de` simply publishes no RDAP service, so we cannot answer.
 
 ### `GET /api/health`
 
@@ -176,9 +189,14 @@ Reports that the deployment is serving. It does not probe RDAP registries.
 
 ### Limits and caching
 
-- **Rate limit** — 60 requests / 60 s per client address, with `X-RateLimit-*` headers. The MVP
-  limiter is in-memory and therefore per serverless instance: a courtesy limit, not a quota. Swap in
-  a shared store by implementing `RateLimiter` in `src/lib/api/rate-limit.ts`.
+- **Rate limit** — a best-effort 60 requests / 60 s per client address, deliberately **not**
+  advertised with `X-RateLimit-*` headers: the counter is in-memory and therefore per serverless
+  instance, and edge cache hits never reach the function at all, so any published budget would be
+  fiction. Rejections still carry `Retry-After`. Swap in a shared store by implementing
+  `RateLimiter` in `src/lib/api/rate-limit.ts`, and reinstate the headers at that point.
+- **CORS** — every API response sends `Access-Control-Allow-Origin: *` and `OPTIONS` answers
+  preflight requests, so browser clients on any origin can call the API. No credentials are
+  involved, which is what makes the wildcard safe.
 - **Caching** — successful lookups are cached at the edge for 1 hour with a 1-day
   `stale-while-revalidate`; unregistered answers for 5 minutes; errors are never cached.
 - **Upstream budget** — RDAP requests time out after 8 s, responses over 2 MB are refused, and at

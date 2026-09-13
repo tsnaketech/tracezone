@@ -127,11 +127,17 @@ describe('lookupDomain', () => {
     await expect(lookupDomain('example.com')).rejects.toMatchObject({ code, status });
   });
 
-  it('reports a TLD with no RDAP service as DOMAIN_NOT_FOUND', async () => {
+  it('distinguishes an unsupported TLD from a name that does not exist', async () => {
+    // `denic.de` is plainly registered; .de simply publishes no RDAP service.
+    // Reporting that as "not found" would tell a client the opposite of the truth.
     lookupRdapDomain.mockResolvedValue({ kind: 'no-service' });
-    await expect(lookupDomain('example.invalidtld')).rejects.toMatchObject({
-      code: 'DOMAIN_NOT_FOUND',
-      status: 404,
+    await expect(lookupDomain('denic.de')).rejects.toMatchObject({
+      code: 'RDAP_UNSUPPORTED_TLD',
+      status: 501,
     });
+
+    lookupRdapDomain.mockResolvedValue(NOT_FOUND);
+    const absent = await lookupDomain('nope-1234.com');
+    expect(absent.registered).toBe(false);
   });
 });

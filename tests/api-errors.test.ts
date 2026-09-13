@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { decode } from '@toon-format/toon';
 import { API_ERROR_CODES, ApiError, ERROR_STATUS, toApiError } from '@/lib/api/errors';
-import { apiErrorResponse, apiResponse, lookupCacheControl } from '@/lib/api/response';
-import { MemoryRateLimiter, clientKey, rateLimitHeaders } from '@/lib/api/rate-limit';
+import {
+  apiErrorResponse,
+  apiResponse,
+  corsPreflightResponse,
+  lookupCacheControl,
+} from '@/lib/api/response';
+import { MemoryRateLimiter, clientKey } from '@/lib/api/rate-limit';
 
 describe('ApiError', () => {
   it('carries the HTTP status of its code', () => {
@@ -135,29 +140,47 @@ describe('clientKey', () => {
   });
 });
 
-describe('rateLimitHeaders', () => {
-  it('emits the standard headers', () => {
-    const headers = rateLimitHeaders({
-      allowed: true,
-      limit: 60,
-      remaining: 59,
-      resetAt: 1_700_000_000_000,
-      retryAfterSeconds: 0,
-    });
-    expect(headers['x-ratelimit-limit']).toBe('60');
-    expect(headers['x-ratelimit-remaining']).toBe('59');
-    expect(headers['x-ratelimit-reset']).toBe('1700000000');
+describe('CORS', () => {
+  it('is advertised on every API response, success or error', () => {
+    for (const response of [
+      apiResponse({ status: 'ok' }, 'json'),
+      apiErrorResponse(new ApiError('INVALID_DOMAIN'), 'json'),
+    ]) {
+      expect(response.headers.get('access-control-allow-origin')).toBe('*');
+      expect(response.headers.get('access-control-allow-methods')).toContain('GET');
+    }
   });
 
-  it('emits nothing when rate limiting is disabled', () => {
-    expect(
-      rateLimitHeaders({
-        allowed: true,
-        limit: Number.POSITIVE_INFINITY,
-        remaining: Number.POSITIVE_INFINITY,
-        resetAt: 0,
-        retryAfterSeconds: 0,
-      }),
-    ).toEqual({});
+  it('answers a preflight with 204 and no body', async () => {
+    const response = corsPreflightResponse();
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(response.headers.get('access-control-allow-methods')).toContain('OPTIONS');
+    expect(response.headers.get('access-control-allow-headers')).toContain('Accept');
+    expect(await response.text()).toBe('');
+  });
+
+  it('never caches a preflight as if it were a lookup', () => {
+    expect(corsPreflightResponse().headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('no rate-limit budget is advertised', () => {
+  it('leaves X-RateLimit-* off responses', () => {
+    // The limiter is per instance and edge hits bypass it entirely, so an
+    // advertised budget would never converge and never produce a 429.
+    const response = apiResponse({ status: 'ok' }, 'json');
+    for (const header of ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset']) {
+      expect(response.headers.get(header)).toBeNull();
+    }
+  });
+
+  it('still sends Retry-After when the limiter does reject', () => {
+    const response = apiErrorResponse(
+      new ApiError('RATE_LIMITED', undefined, { 'retry-after': '42' }),
+      'json',
+    );
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('42');
   });
 });

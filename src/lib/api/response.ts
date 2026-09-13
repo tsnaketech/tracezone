@@ -14,6 +14,27 @@ import {
 } from '@/lib/config';
 import { contentTypeFor, serialize, type OutputFormat } from '@/lib/serialization';
 
+/**
+ * The API is public, unauthenticated and read-only, so it is reachable from any
+ * browser origin. Nothing here depends on cookies or credentials, which is why
+ * the wildcard origin is safe: there is no ambient authority for a third-party
+ * page to borrow.
+ */
+export const CORS_HEADERS: Readonly<Record<string, string>> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-allow-headers': 'Accept, Content-Type',
+  'access-control-max-age': '86400',
+};
+
+/** Answer a CORS preflight. No body, and never cached as a lookup. */
+export function corsPreflightResponse(): Response {
+  return new Response(null, {
+    status: 204,
+    headers: { ...CORS_HEADERS, 'cache-control': 'no-store' },
+  });
+}
+
 export interface ApiResponseInit {
   readonly status?: number;
   readonly headers?: Record<string, string>;
@@ -29,6 +50,7 @@ export function apiResponse(
     headers: {
       'content-type': contentTypeFor(format),
       vary: 'Accept',
+      ...CORS_HEADERS,
       ...init.headers,
     },
   });

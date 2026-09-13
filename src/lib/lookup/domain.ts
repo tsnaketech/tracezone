@@ -144,10 +144,10 @@ export async function lookupDomain(
     }
 
     if (outcome.kind === 'no-service') {
-      throw new ApiError(
-        'DOMAIN_NOT_FOUND',
-        'No RDAP service is published for this top-level domain.',
-      );
+      // Distinct from "this name does not exist": the name may well be
+      // registered, we simply have no protocol to ask. This is where a WHOIS
+      // fallback would slot in.
+      throw new ApiError('RDAP_UNSUPPORTED_TLD');
     }
 
     if (outcome.kind === 'error') {

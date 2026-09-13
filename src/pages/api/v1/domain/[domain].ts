@@ -8,19 +8,19 @@
 import type { APIRoute } from 'astro';
 import { ApiError } from '@/lib/api/errors';
 import { resolveFormat } from '@/lib/api/format';
-import { clientKey, getRateLimiter, rateLimitHeaders } from '@/lib/api/rate-limit';
-import { apiErrorResponse, apiResponse, lookupCacheControl } from '@/lib/api/response';
+import { parseBooleanParam } from '@/lib/api/params';
+import { clientKey, getRateLimiter } from '@/lib/api/rate-limit';
+import {
+  apiErrorResponse,
+  apiResponse,
+  corsPreflightResponse,
+  lookupCacheControl,
+} from '@/lib/api/response';
 import { lookupDomain } from '@/lib/lookup/domain';
 import { DEFAULT_FORMAT, type OutputFormat } from '@/lib/serialization';
 import { decodeDomainParam } from '@/lib/validation/domain';
 
 export const prerender = false;
-
-function wantsRaw(url: URL): boolean {
-  const raw = url.searchParams.get('raw');
-  if (raw === null) return true;
-  return !['0', 'false', 'no'].includes(raw.trim().toLowerCase());
-}
 
 export const GET: APIRoute = async ({ params, request }) => {
   const url = new URL(request.url);
@@ -34,34 +34,33 @@ export const GET: APIRoute = async ({ params, request }) => {
     return apiErrorResponse(error, DEFAULT_FORMAT);
   }
 
-  const limiter = getRateLimiter();
-  const limit = await limiter.check(clientKey(request));
-  const limitHeaders = rateLimitHeaders(limit);
-
+  // No X-RateLimit-* headers: the limiter is per serverless instance and edge
+  // hits never reach it, so an advertised budget would be fiction. See
+  // `@/lib/api/rate-limit` for what it takes to make it real.
+  const limit = await getRateLimiter().check(clientKey(request));
   if (!limit.allowed) {
     return apiErrorResponse(
       new ApiError('RATE_LIMITED', undefined, {
         'retry-after': String(limit.retryAfterSeconds),
       }),
       format,
-      limitHeaders,
     );
   }
 
   try {
     const result = await lookupDomain(decodeDomainParam(params.domain ?? ''), {
-      includeRaw: wantsRaw(url),
+      includeRaw: parseBooleanParam(url, 'raw', true),
     });
     return apiResponse(result, format, {
-      headers: {
-        'cache-control': lookupCacheControl(result.registered),
-        ...limitHeaders,
-      },
+      headers: { 'cache-control': lookupCacheControl(result.registered) },
     });
   } catch (error) {
-    return apiErrorResponse(error, format, limitHeaders);
+    return apiErrorResponse(error, format);
   }
 };
+
+/** CORS preflight, so browser clients on other origins can call the API. */
+export const OPTIONS: APIRoute = () => corsPreflightResponse();
 
 /** Anything other than GET is rejected in the negotiated format. */
 export const ALL: APIRoute = ({ request }) => {
@@ -72,5 +71,8 @@ export const ALL: APIRoute = ({ request }) => {
       return DEFAULT_FORMAT;
     }
   })();
-  return apiErrorResponse(new ApiError('METHOD_NOT_ALLOWED', undefined, { allow: 'GET' }), format);
+  return apiErrorResponse(
+    new ApiError('METHOD_NOT_ALLOWED', undefined, { allow: 'GET, OPTIONS' }),
+    format,
+  );
 };

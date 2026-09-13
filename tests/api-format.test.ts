@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/lib/api/errors';
 import { formatFromAccept, parseAcceptHeader, resolveFormat } from '@/lib/api/format';
+import { BOOLEAN_PARAM_VALUES, parseBooleanParam } from '@/lib/api/params';
 
 function resolve(search: string, accept?: string) {
   const url = new URL(`https://tracezone.test/api/v1/domain/example.com${search}`);
@@ -83,5 +84,46 @@ describe('resolveFormat', () => {
 
   it('ignores an empty format parameter', () => {
     expect(resolve('?format=', 'text/toon')).toBe('toon');
+  });
+});
+
+describe('parseBooleanParam', () => {
+  const url = (search: string) =>
+    new URL(`https://tracezone.test/api/v1/domain/example.com${search}`);
+
+  it('returns the fallback when the parameter is absent', () => {
+    expect(parseBooleanParam(url(''), 'raw', true)).toBe(true);
+    expect(parseBooleanParam(url(''), 'raw', false)).toBe(false);
+  });
+
+  it.each(['true', '1', 'yes', 'TRUE', ' Yes '])('reads %s as true', (value) => {
+    expect(parseBooleanParam(url(`?raw=${encodeURIComponent(value)}`), 'raw', false)).toBe(true);
+  });
+
+  it.each(['false', '0', 'no', 'FALSE', ' No '])('reads %s as false', (value) => {
+    expect(parseBooleanParam(url(`?raw=${encodeURIComponent(value)}`), 'raw', true)).toBe(false);
+  });
+
+  // `raw=maybe` used to be read as true and `raw=0` as false, so a typo
+  // silently changed the shape of the response. An explicitly empty value is
+  // still an explicit value, and is rejected too.
+  it.each(['maybe', 'y', '2', 'null', ''])('rejects %s instead of guessing', (value) => {
+    const target = url(`?raw=${encodeURIComponent(value)}`);
+    expect(() => parseBooleanParam(target, 'raw', true)).toThrowError(ApiError);
+  });
+
+  it('reports INVALID_PARAMETER with a 400 and names the accepted values', () => {
+    try {
+      parseBooleanParam(url('?raw=maybe'), 'raw', true);
+      expect.unreachable('should have thrown');
+    } catch (error) {
+      const apiError = error as ApiError;
+      expect(apiError.code).toBe('INVALID_PARAMETER');
+      expect(apiError.status).toBe(400);
+      expect(apiError.message).toContain('raw');
+      for (const value of BOOLEAN_PARAM_VALUES) {
+        expect(apiError.message).toContain(value);
+      }
+    }
   });
 });

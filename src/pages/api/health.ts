@@ -7,7 +7,7 @@
 
 import type { APIRoute } from 'astro';
 import { resolveFormat } from '@/lib/api/format';
-import { apiErrorResponse, apiResponse } from '@/lib/api/response';
+import { apiErrorResponse, apiResponse, corsPreflightResponse } from '@/lib/api/response';
 import { DEFAULT_FORMAT, type OutputFormat } from '@/lib/serialization';
 
 export const prerender = false;
@@ -24,3 +24,6 @@ export const GET: APIRoute = ({ request }) => {
     headers: { 'cache-control': 'no-store' },
   });
 };
+
+/** CORS preflight, so browser clients on other origins can call the API. */
+export const OPTIONS: APIRoute = () => corsPreflightResponse();

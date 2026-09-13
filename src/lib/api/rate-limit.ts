@@ -6,9 +6,18 @@
  * Vercel is per serverless instance — it blunts a single noisy client but is
  * not a global quota.
  *
- * To make it global, implement `RateLimiter` against a shared store (Vercel KV,
- * Upstash Redis, Durable Objects...) and return it from {@link getRateLimiter}.
- * Nothing else has to change.
+ * Two consequences worth knowing before trusting it:
+ *
+ *   - each instance counts separately, so the effective budget is the configured
+ *     limit multiplied by however many instances are warm;
+ *   - a response served from the edge cache never reaches the function at all,
+ *     so it is never counted.
+ *
+ * That is why the API advertises no `X-RateLimit-*` headers: a budget that never
+ * converges and never returns 429 is worse than no budget at all. Implement
+ * `RateLimiter` against a shared store (Vercel KV, Upstash Redis, Durable
+ * Objects...), return it from {@link getRateLimiter}, and reinstate the headers
+ * at that point — nothing else has to change.
  */
 
 import { RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_MS } from '@/lib/config';
@@ -110,14 +119,4 @@ export function clientKey(request: Request): string {
   const first = forwarded?.split(',')[0]?.trim();
   if (first !== undefined && first !== '') return first;
   return request.headers.get('x-real-ip')?.trim() ?? 'unknown';
-}
-
-/** Standard rate-limit headers for a result. */
-export function rateLimitHeaders(result: RateLimitResult): Record<string, string> {
-  if (!Number.isFinite(result.limit)) return {};
-  return {
-    'x-ratelimit-limit': String(result.limit),
-    'x-ratelimit-remaining': String(result.remaining),
-    'x-ratelimit-reset': String(Math.ceil(result.resetAt / 1000)),
-  };
 }

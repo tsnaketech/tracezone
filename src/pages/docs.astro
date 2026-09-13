@@ -7,11 +7,18 @@ const BASE = 'https://tracezone.vercel.app';
 
 const HTTP_CODES = [
   ['200', 'Lookup succeeded. The domain may or may not be registered — read `registered`.'],
-  ['400', 'INVALID_DOMAIN or INVALID_FORMAT — the request could not be understood.'],
-  ['404', 'DOMAIN_NOT_FOUND — no RDAP service is published for this top-level domain.'],
-  ['405', 'METHOD_NOT_ALLOWED — only GET is accepted.'],
+  [
+    '400',
+    'INVALID_DOMAIN, INVALID_FORMAT or INVALID_PARAMETER — the request could not be understood.',
+  ],
+  [
+    '403',
+    'Blocked by the framework cross-site guard before reaching the endpoint — see the note below.',
+  ],
+  ['405', 'METHOD_NOT_ALLOWED — only GET (and OPTIONS) are accepted.'],
   ['429', 'RATE_LIMITED — slow down; see `Retry-After`.'],
   ['500', 'INTERNAL_ERROR — unexpected failure on our side.'],
+  ['501', 'RDAP_UNSUPPORTED_TLD — this TLD publishes no RDAP service at all.'],
   ['502', 'RDAP_ERROR — the registry answered with an error.'],
   ['504', 'UPSTREAM_TIMEOUT — the registry did not answer in time.'],
 ] as const;
@@ -28,7 +35,7 @@ const PARAMS = [
     'raw',
     'query',
     'true | false',
-    'Include the untouched RDAP payload under `raw`. Defaults to true.',
+    'Include the untouched RDAP payload under `raw`. Defaults to true. Also accepts 1/0 and yes/no; any other value is an error.',
   ],
 ] as const;
 
@@ -136,10 +143,15 @@ const windowSeconds = Math.round(RATE_LIMIT_WINDOW_MS / 1000);
         <p class="tz-mono mt-2 text-[13px] text-accent">GET /api/v1/domain/:domain</p>
         <p class="mt-3 text-[14px] text-muted">
           Returns normalised RDAP registration data for a domain. The name is normalised before the
-          lookup: <code class="tz-mono text-fg">https://www.Example.com/path</code> is queried as
-          <code class="tz-mono text-fg">example.com</code>. Names that cannot be resolved
-          unambiguously are rejected with <code class="tz-mono text-fg">INVALID_DOMAIN</code> rather
-          than guessed.
+          lookup: <code class="tz-mono text-fg">https://www.Example.com/path</code> becomes
+          <code class="tz-mono text-fg">www.example.com</code>, and because RDAP only knows
+          registrable names the lookup itself resolves to
+          <code class="tz-mono text-fg">example.com</code>. The two are reported separately:
+          <code class="tz-mono text-fg">query</code> echoes what you asked for,
+          <code class="tz-mono text-fg">domain.name</code> is what the registry answered for, and
+          <code class="tz-mono text-fg">warnings</code> records the difference. Names that cannot be
+          resolved unambiguously are rejected with
+          <code class="tz-mono text-fg">INVALID_DOMAIN</code> rather than guessed.
         </p>
 
         <h3 class="mt-6 mb-2 text-[13px] font-semibold tracking-wide text-fg uppercase">
@@ -227,6 +239,16 @@ const windowSeconds = Math.round(RATE_LIMIT_WINDOW_MS / 1000);
         <div class="mt-4">
           <CodeBlock id="tz-example-error" label="Error envelope" code={exampleError} />
         </div>
+
+        <p class="mt-4 text-[14px] text-muted">
+          One wrinkle worth knowing: a non-GET request carrying no matching
+          <code class="tz-mono text-fg">Origin</code> header is rejected with a plain-text
+          <code class="tz-mono text-fg">403</code> by the framework's cross-site guard, before it
+          reaches the endpoint — so it does not use the envelope above. With a matching
+          <code class="tz-mono text-fg">Origin</code> you get the expected
+          <code class="tz-mono text-fg">405</code>. The API is read-only so there is nothing for the
+          guard to protect, but it is left in place rather than disabled globally.
+        </p>
 
         <div class="tz-card mt-4 overflow-x-auto">
           <table class="w-full text-left text-[13px]">
