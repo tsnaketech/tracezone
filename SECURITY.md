@@ -11,9 +11,6 @@ Please report privately through
 **[GitHub Security Advisories](https://github.com/tsnaketech/tracezone/security/advisories/new)**
 rather than opening a public issue.
 
-> **Maintainer note:** private reporting must be switched on for that link to
-> work — Settings → Advanced Security → Private vulnerability reporting.
-
 Please include:
 
 - what you did (a `curl` command or a URL is ideal);
