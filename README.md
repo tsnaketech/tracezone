@@ -281,6 +281,9 @@ tests/                       Vitest suites + an RDAP fixture
 - Errors never carry a stack trace or internal detail; client addresses are used as a rate-limit key
   and are never logged.
 
+See [SECURITY.md](SECURITY.md) for the full policy, the reporting channel, and what is explicitly
+out of scope.
+
 ---
 
 ## Tests
