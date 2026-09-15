@@ -134,6 +134,12 @@ optional variable, `PUBLIC_SITE_URL`, sets the canonical origin at build time an
 is public by definition. Anything imported by a hydrated Svelte island can reach
 the browser, so `src/lib/config.ts` holds public constants only.
 
+Vite refuses to inline an environment variable without a `PUBLIC_` prefix into
+client code, but that guard covers the environment and nothing else: a value
+written into a `.ts` file and reachable from an island is published. What a build
+actually ships is checked against `dist/client/`, not by review — see the README's
+security notes for the command.
+
 ## Dependencies
 
 Runtime dependencies are deliberately few: Astro, Svelte, Tailwind and

@@ -280,6 +280,18 @@ tests/                       Vitest suites + an RDAP fixture
   inline scripts and scoped styles, so `script-src` needs no `'unsafe-inline'`.
 - Errors never carry a stack trace or internal detail; client addresses are used as a rate-limit key
   and are never logged.
+- **A hydrated island's import graph is shipped to the browser.** Bundling follows `import`
+  statements mechanically: anything reachable from a `client:*` component ends up in `dist/client/`.
+  Tree-shaking works per export, not per file — `validateDomain` reaches the browser while
+  `domainCandidates`, two functions below it in the same module, does not — so the rule is about
+  what an island _touches_, not where code lives. Islands may import pure, dependency-free helpers
+  (`validation/domain.ts`, the public constants in `config.ts`) and nothing else; importing
+  `lookup/`, `rdap/` or `net/` from a component would publish that whole chain, silently and without
+  a build error. Verify rather than assume — the build output is the only authority:
+
+  ```bash
+  pnpm build && grep -rlF "a-string-that-must-not-ship" dist/client/
+  ```
 
 See [SECURITY.md](SECURITY.md) for the full policy, the reporting channel, and what is explicitly
 out of scope.
@@ -292,10 +304,10 @@ out of scope.
 pnpm test
 ```
 
-144 tests covering domain validation and normalisation, RDAP parsing (dates, registrar, jCard
+182 tests covering domain validation and normalisation, RDAP parsing (dates, registrar, jCard
 contacts, DNSSEC, redaction), the TOON/JSON serialisers and their round-trip equivalence, format
-negotiation and its precedence rules, the SSRF guard, RDAP URL construction, upstream error mapping
-and the rate limiter.
+negotiation and its precedence rules, the SSRF guard, RDAP URL construction, upstream error mapping,
+the CORS contract, the time-budget ordering and the bootstrap registry's success and failure caches.
 
 ---
 
