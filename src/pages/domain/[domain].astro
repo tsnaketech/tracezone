@@ -13,6 +13,7 @@ import SearchBar from '@/components/SearchBar.svelte';
 import RegistrarCard from '@/components/RegistrarCard.astro';
 import { toApiError } from '@/lib/api/errors';
 import { lookupCacheControl } from '@/lib/api/response';
+import { CACHE_REDIRECT_S_MAXAGE } from '@/lib/config';
 import { lookupDomain } from '@/lib/lookup/domain';
 import type { DomainLookupResult } from '@/lib/lookup/types';
 import { toJson, toToon } from '@/lib/serialization';
@@ -26,7 +27,10 @@ const requested = decodeDomainParam(Astro.params.domain ?? '');
 // rather than serving the same result under several addresses.
 const validation = validateDomain(requested);
 if (validation.ok && validation.domain !== requested) {
-  return Astro.redirect(`/domain/${encodeURIComponent(validation.domain)}`, 308);
+  const redirect = Astro.redirect(`/domain/${encodeURIComponent(validation.domain)}`, 308);
+  // Headers set on Astro.response do not reach a Response returned from here.
+  redirect.headers.set('cache-control', `public, max-age=0, s-maxage=${CACHE_REDIRECT_S_MAXAGE}`);
+  return redirect;
 }
 
 let result: DomainLookupResult | null = null;

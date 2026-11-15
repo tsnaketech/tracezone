@@ -75,6 +75,9 @@ export const CACHE_REGISTERED_SWR = 86_400;
 export const CACHE_UNREGISTERED_S_MAXAGE = 300;
 export const CACHE_UNREGISTERED_SWR = 3_600;
 
+/** Canonical redirects are pure string work and never change. */
+export const CACHE_REDIRECT_S_MAXAGE = 86_400;
+
 /** In-memory rate limit applied per client IP to the public API. */
 export const RATE_LIMIT_MAX_REQUESTS = 60;
 export const RATE_LIMIT_WINDOW_MS = 60_000;
